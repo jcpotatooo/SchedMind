@@ -1,0 +1,70 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // An admin is someone whose users/{uid} document has role == "admin".
+    // Admins can only be created by editing the database directly in the
+    // Firebase Console (never from the app).
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // ---------- users/{uid} ----------
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+
+      // A student may only create THEIR OWN profile, and only as "student".
+      allow create: if isOwner(userId)
+        && request.resource.data.uid == userId
+        && request.resource.data.role == 'student';
+
+      // Students can edit their profile but can't change their role or uid.
+      allow update: if (isOwner(userId)
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.uid == resource.data.uid)
+        || isAdmin();
+
+      allow delete: if isAdmin();
+    }
+
+    // ---------- tasks/{taskId} ----------
+    function validTask(t) {
+      return t.title is string && t.title.size() > 0 && t.title.size() <= 100
+        && t.category in ['Assignment', 'Project', 'Quiz', 'Examination', 'Other']
+        && t.status in ['todo', 'in_progress', 'done']
+        && t.difficulty in [1, 2, 3]
+        && t.importance in [1, 2, 3]
+        && t.estimatedMinutes is int
+        && t.estimatedMinutes > 0 && t.estimatedMinutes <= 10080
+        && t.deadline is timestamp;
+    }
+
+    match /tasks/{taskId} {
+      allow read: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && validTask(request.resource.data);
+
+      // Only the owner can edit, and the owner field can never be changed.
+      allow update: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == resource.data.userId
+        && validTask(request.resource.data);
+
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // Everything else is blocked until we add rules for it in later phases.
+  }
+}
