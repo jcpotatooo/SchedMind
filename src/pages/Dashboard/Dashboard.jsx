@@ -114,7 +114,7 @@ export default function Dashboard() {
             {/* Completion donut */}
             <section className="rounded-3xl bg-surface p-5 shadow-card lg:col-span-2" aria-label="Task completion">
               <h2 className="font-bold">Task Completion</h2>
-              <div className="mt-4 flex items-center gap-5">
+              <div className="mt-4 flex flex-col items-center gap-4 sm:flex-row sm:gap-5">
                 <div className="relative h-32 w-32 shrink-0">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>

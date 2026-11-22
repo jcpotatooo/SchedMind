@@ -20,16 +20,19 @@ export default function Modal({ title, onClose, children }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-ink-900/40 sm:items-center sm:p-4"
+      className="fixed inset-0 z-[100] flex items-end justify-center bg-ink-900/50 backdrop-blur-xs p-0 sm:items-center sm:p-4"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="flex max-h-[92vh] w-full max-w-lg flex-col rounded-t-3xl bg-surface shadow-soft sm:rounded-3xl"
+        className="flex max-h-[88dvh] w-full max-w-lg flex-col rounded-t-3xl bg-surface shadow-soft sm:max-h-[90vh] sm:rounded-3xl"
       >
-        <div className="flex items-center justify-between px-6 pb-2 pt-5">
+        {/* Mobile pull/drag indicator */}
+        <div className="mx-auto mt-2.5 h-1.5 w-10 shrink-0 rounded-full bg-ink-200 sm:hidden" />
+
+        <div className="flex items-center justify-between px-5 pb-2 pt-3 sm:px-6 sm:pt-5">
           <h2 className="text-lg font-extrabold tracking-tight">{title}</h2>
           <button
             type="button"
@@ -40,7 +43,9 @@ export default function Modal({ title, onClose, children }) {
             <X size={18} />
           </button>
         </div>
-        <div className="overflow-y-auto px-6 pb-6 pt-2">{children}</div>
+        <div className="overflow-y-auto px-5 pt-2 pb-[max(2.5rem,calc(env(safe-area-inset-bottom,0px)+2rem))] sm:px-6 sm:pb-6">
+          {children}
+        </div>
       </div>
     </div>
   );

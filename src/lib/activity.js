@@ -60,7 +60,8 @@ export function studyMinutesSince(focusSessions, sessions, sinceMs) {
     if (new Date(f.startedAt).getTime() >= sinceMs) total += f.minutes || 0;
   });
   sessions.forEach((s) => {
-    if (s.status === "done" && s.start >= sinceMs) total += s.minutes || 0;
+    const time = s.completedAt || s.start;
+    if (s.status === "done" && time >= sinceMs) total += s.minutes || 0;
   });
   return total;
 }
@@ -88,7 +89,9 @@ export function computeProgress({ tasks, focusSessions, sessions, now }) {
     add(focusByDay, key, f.minutes || 0);
     add(studyByDay, key, f.minutes || 0);
   });
-  sessions.filter((s) => s.status === "done").forEach((s) => add(studyByDay, dayKey(s.start), s.minutes || 0));
+  sessions
+    .filter((s) => s.status === "done")
+    .forEach((s) => add(studyByDay, dayKey(s.completedAt || s.start), s.minutes || 0));
   done.forEach((t) => t.completedAt && add(tasksByDay, dayKey(t.completedAt), 1));
 
   const activeDays = new Set([

@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { format, isToday, isTomorrow, startOfDay } from "date-fns";
-import { TriangleAlert, CalendarDays, Check, ListChecks, RotateCcw, Sparkles, X } from "lucide-react";
+import { TriangleAlert, CalendarDays, Check, CheckCircle2, ListChecks, RotateCcw, Sparkles, X } from "lucide-react";
 import { usePlan } from "../../context/PlanContext.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { setSessionStatus } from "../../services/scheduleService.js";
+import { updateTask } from "../../services/taskService.js";
 import { friendlyError } from "../../lib/authErrors.js";
 import { fmtMin } from "../../lib/plan/format.js";
 import Alert from "../../components/ui/Alert.jsx";
 import Button from "../../components/ui/Button.jsx";
 import EmptyState from "../../components/ui/EmptyState.jsx";
+import Modal from "../../components/ui/Modal.jsx";
 import Spinner from "../../components/ui/Spinner.jsx";
 import PriorityList from "../../components/plan/PriorityList.jsx";
 import BehaviorCard from "../../components/plan/BehaviorCard.jsx";
@@ -39,6 +41,7 @@ export default function Schedule() {
   const [notice, setNotice] = useState(null);
   const [showAll, setShowAll] = useState(false);
   const [openWhy, setOpenWhy] = useState(null);
+  const [taskPrompt, setTaskPrompt] = useState(null);
 
   useEffect(() => {
     if (!notice) return;
@@ -78,13 +81,24 @@ export default function Schedule() {
 
   async function changeStatus(session, status) {
     try {
+      const task = tasks.find((t) => t.id === session.taskId);
       await setSessionStatus({
         uid: user.uid,
         schedule,
         session,
         status,
-        task: tasks.find((t) => t.id === session.taskId),
+        task,
       });
+
+      // Prompt completion if this session was marked done and no more planned sessions remain for this task
+      if (status === "done" && task && task.status !== "done") {
+        const remainingPlanned = sessions.filter(
+          (s) => s.taskId === session.taskId && s.id !== session.id && s.status === "planned"
+        );
+        if (remainingPlanned.length === 0) {
+          setTaskPrompt(task);
+        }
+      }
     } catch (err) {
       setNotice({ type: "error", text: friendlyError(err) || "Could not update the session." });
     }
@@ -114,7 +128,7 @@ export default function Schedule() {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight">Smart Schedule</h1>
           <p className="text-sm text-ink-500">
@@ -123,7 +137,7 @@ export default function Schedule() {
           </p>
         </div>
         {schedule && (
-          <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             <button type="button" onClick={runAI} disabled={busy}
               className="inline-flex h-11 items-center gap-2 rounded-2xl bg-brand-500 px-4 text-sm font-semibold text-white shadow-card transition hover:bg-brand-600 disabled:opacity-60">
               <Sparkles size={16} /> {busy ? "Working..." : "Generate with AI"}
@@ -193,14 +207,69 @@ export default function Schedule() {
             )}
 
             {usedUp.length > 0 && (
-              <div className="mb-4 rounded-2xl bg-blue-50 p-4 text-sm text-blue-800">
-                <p className="font-semibold">Planned study time used up</p>
-                <ul className="mt-1 list-disc pl-5">
+              <div className="mb-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 shadow-sm">
+                <div className="flex items-center gap-2 font-bold text-blue-900">
+                  <CheckCircle2 size={18} className="shrink-0 text-blue-600" />
+                  <span>Planned study time used up</span>
+                </div>
+                <p className="mt-1 text-xs text-blue-700">
+                  You completed all planned study time for the following task{usedUp.length > 1 ? "s" : ""}. If finished, mark done right here:
+                </p>
+                <div className="mt-3 space-y-2">
                   {usedUp.map((i) => (
-                    <li key={i.task.id}>“{i.task.title}”: you studied {fmtMin(i.task.studiedMinutes)}, which covers your estimate plus extra time.</li>
+                    <div
+                      key={i.task.id}
+                      className="flex flex-col gap-2 rounded-xl bg-white/90 p-3 shadow-xs sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-ink-900">“{i.task.title}”</p>
+                        <p className="text-xs text-ink-500">
+                          Studied {fmtMin(i.task.studiedMinutes)} (covers {fmtMin(i.task.estimatedMinutes)} estimate + extra reserve)
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={async () => {
+                            setBusy(true);
+                            try {
+                              await updateTask(i.task, { status: "done" });
+                              setNotice({ type: "success", text: `“${i.task.title}” marked as Done.` });
+                            } catch (err) {
+                              setNotice({ type: "error", text: friendlyError(err) });
+                            } finally {
+                              setBusy(false);
+                            }
+                          }}
+                          className="inline-flex h-8 items-center gap-1 rounded-lg bg-brand-500 px-3 text-xs font-semibold text-white shadow-xs transition hover:bg-brand-600 disabled:opacity-50"
+                        >
+                          <Check size={14} /> Mark Task Done
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={async () => {
+                            setBusy(true);
+                            try {
+                              const newEst = (i.task.estimatedMinutes || 0) + 30;
+                              await updateTask(i.task, { estimatedMinutes: newEst });
+                              setNotice({ type: "success", text: `Added 30 min to “${i.task.title}”. Schedule will add sessions.` });
+                            } catch (err) {
+                              setNotice({ type: "error", text: friendlyError(err) });
+                            } finally {
+                              setBusy(false);
+                            }
+                          }}
+                          className="inline-flex h-8 items-center gap-1 rounded-lg border border-ink-200 bg-white px-2.5 text-xs font-medium text-ink-700 transition hover:bg-page disabled:opacity-50"
+                          title="Add 30 minutes to task estimate"
+                        >
+                          +30 min
+                        </button>
+                      </div>
+                    </div>
                   ))}
-                </ul>
-                <p className="mt-1">If it is finished, mark it Done in <Link to="/tasks" className="font-semibold underline">Tasks</Link>. If not, raise its estimated time there and the schedule will add sessions.</p>
+                </div>
               </div>
             )}
 
@@ -309,6 +378,37 @@ export default function Schedule() {
         <ChangeLog entries={schedule?.changeLog} />
         <BehaviorCard behavior={behavior} />
       </div>
+
+      {taskPrompt && (
+        <Modal title="Task study time finished!" onClose={() => setTaskPrompt(null)}>
+          <p className="text-sm text-ink-700">
+            You just completed all scheduled study sessions for <strong>“{taskPrompt.title}”</strong> ({fmtMin(taskPrompt.studiedMinutes || 0)} studied).
+            Have you finished this task?
+          </p>
+          <div className="mt-6 flex flex-col-reverse justify-end gap-2 sm:flex-row">
+            <Button variant="outline" onClick={() => setTaskPrompt(null)}>
+              Not yet (keep In Progress)
+            </Button>
+            <Button
+              onClick={async () => {
+                const t = taskPrompt;
+                setTaskPrompt(null);
+                setBusy(true);
+                try {
+                  await updateTask(t, { status: "done" });
+                  setNotice({ type: "success", text: `“${t.title}” marked as Done.` });
+                } catch (err) {
+                  setNotice({ type: "error", text: friendlyError(err) });
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <Check size={16} /> Yes, mark Task as Done
+            </Button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

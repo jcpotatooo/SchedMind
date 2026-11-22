@@ -54,7 +54,7 @@ function TimerPill() {
   const total = Math.ceil(remainingMs / 1000);
   const text = `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
   return (
-    <Link to="/focus" className="fixed bottom-20 right-4 z-40 flex items-center gap-2 rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-soft md:bottom-6">
+    <Link to="/focus" className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] right-4 z-20 flex items-center gap-2 rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-soft md:bottom-6">
       <Timer size={16} /> {text}{timer.status === "paused" ? " (paused)" : ""}
     </Link>
   );
@@ -90,12 +90,12 @@ function Shell() {
         <div className="flex items-center gap-1"><BellLink /><LogoutButton /></div>
       </header>
 
-      <main className="pb-24 md:pb-8"><Outlet /></main>
+      <main className="pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-8"><Outlet /></main>
       <TimerPill />
 
       {more && (
-        <div className="fixed inset-0 z-40 bg-black/30 md:hidden" onClick={() => setMore(false)}>
-          <div className="absolute inset-x-0 bottom-16 rounded-t-3xl bg-surface p-4 shadow-soft" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs md:hidden" onClick={() => setMore(false)}>
+          <div className="absolute inset-x-0 bottom-[calc(3.75rem+env(safe-area-inset-bottom,0px))] rounded-t-3xl bg-surface p-4 pb-6 shadow-soft" onClick={(e) => e.stopPropagation()}>
             <div className="mb-2 flex items-center justify-between">
               <p className="font-bold">More</p>
               <button type="button" aria-label="Close menu" onClick={() => setMore(false)}><X size={20} /></button>
@@ -109,7 +109,7 @@ function Shell() {
         </div>
       )}
 
-      <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-50 flex border-t border-ink-100 bg-surface md:hidden">
+      <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 flex border-t border-ink-100 bg-surface pb-[env(safe-area-inset-bottom,0px)] md:hidden">
         {phoneMain.map(({ to, label, icon: Icon, end }) => (
           <NavLink key={to} to={to} end={end}
             className={({ isActive }) => `flex flex-1 flex-col items-center gap-1 py-3 text-xs font-medium ${isActive ? "text-brand-600" : "text-ink-500"}`}>

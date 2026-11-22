@@ -1,4 +1,4 @@
-import { Clock, Pencil, Trash2, Hourglass } from "lucide-react";
+import { Clock, Pencil, Trash2, Hourglass, Check } from "lucide-react";
 import { PriorityChip, RiskChip } from "../plan/Chips.jsx";
 import {
   STATUSES,
@@ -37,14 +37,22 @@ export default function TaskCard({ task, priority, risk, onOpen, onEdit, onDelet
             {overdue && (
               <span className="rounded-full bg-red-50 px-2 py-0.5 font-medium text-red-700">Overdue</span>
             )}
+            {!done && (task.studiedMinutes || 0) >= (task.estimatedMinutes || 0) && (task.estimatedMinutes || 0) > 0 && (
+              <span className="rounded-full bg-blue-50 px-2 py-0.5 font-medium text-blue-700">Study time covered</span>
+            )}
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-500">
             <span className="inline-flex items-center gap-1">
               <Clock size={14} /> {formatDeadline(task.deadline)}
             </span>
-            <span className="inline-flex items-center gap-1">
-              <Hourglass size={14} /> {formatMinutes(task.estimatedMinutes)}
+            <span className="inline-flex items-center gap-1" title="Time studied / estimated">
+              <Hourglass size={14} />
+              {done
+                ? formatMinutes(task.actualMinutes || task.studiedMinutes || task.estimatedMinutes)
+                : (task.studiedMinutes || 0) > 0
+                ? `${formatMinutes(task.studiedMinutes)} / ${formatMinutes(task.estimatedMinutes)}`
+                : formatMinutes(task.estimatedMinutes)}
             </span>
             <span>Importance: {levelLabel(task.importance)}</span>
             <span>Difficulty: {levelLabel(task.difficulty)}</span>
@@ -53,11 +61,23 @@ export default function TaskCard({ task, priority, risk, onOpen, onEdit, onDelet
       </div>
 
       <div className="mt-4 flex items-center justify-between gap-3 border-t border-ink-100 pt-3">
-        <select aria-label={`Status of ${task.title}`} value={task.status}
-          onChange={(e) => onStatusChange(task, e.target.value)}
-          className="h-9 rounded-lg border border-ink-100 bg-page px-2 text-xs font-medium outline-none focus:border-brand-500">
-          {STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-        </select>
+        <div className="flex items-center gap-2">
+          <select aria-label={`Status of ${task.title}`} value={task.status}
+            onChange={(e) => onStatusChange(task, e.target.value)}
+            className="h-9 rounded-lg border border-ink-100 bg-page px-2 text-xs font-medium outline-none focus:border-brand-500">
+            {STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
+          {!done && (task.studiedMinutes || 0) >= (task.estimatedMinutes || 0) && (task.estimatedMinutes || 0) > 0 && (
+            <button
+              type="button"
+              onClick={() => onStatusChange(task, "done")}
+              className="inline-flex h-9 items-center gap-1 rounded-lg bg-brand-50 px-2.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-100"
+              title="Mark this task as finished"
+            >
+              <Check size={14} /> Complete
+            </button>
+          )}
+        </div>
 
         <div className="flex gap-1">
           <button type="button" onClick={() => onEdit(task)} aria-label={`Edit ${task.title}`}

@@ -58,7 +58,13 @@ export function describeChanges(prev, next) {
     if (n.e !== p.e) reasons.push(`The estimate for “${n.t}” changed from ${fmtMin(p.e)} to ${fmtMin(n.e)}.`);
     if (n.f !== p.f || n.i !== p.i) reasons.push(`The importance or difficulty of “${n.t}” changed.`);
     if (n.s !== p.s) {
-      reasons.push(n.s === "done" ? `“${n.t}” was completed.` : `“${n.t}” status changed.`);
+      const msg =
+        n.s === "done"
+          ? `“${n.t}” was completed.`
+          : n.s === "in_progress" && p.s === "todo"
+          ? `“${n.t}” was started.`
+          : `“${n.t}” status changed.`;
+      reasons.push(msg);
     }
     if (n.st > p.st) reasons.push(`Study progress was logged on “${n.t}”.`);
     if (n.st < p.st) reasons.push(`A study session for “${n.t}” was unmarked.`);

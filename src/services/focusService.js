@@ -18,7 +18,11 @@ export async function saveFocusSession({ uid, task, minutes, plannedMinutes, sta
     createdAt: serverTimestamp(),
   });
   if (task) {
-    batch.update(doc(db, "tasks", task.id), { studiedMinutes: increment(minutes), updatedAt: serverTimestamp() });
+    const taskUpdates = { studiedMinutes: increment(minutes), updatedAt: serverTimestamp() };
+    if (task.status === "todo") {
+      taskUpdates.status = "in_progress";
+    }
+    batch.update(doc(db, "tasks", task.id), taskUpdates);
   }
   await batch.commit();
 }

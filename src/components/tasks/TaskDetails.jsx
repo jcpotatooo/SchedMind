@@ -34,6 +34,8 @@ export default function TaskDetails({ task, priority, risk, onClose, onEdit, onD
           {isOverdue(task) && <span className="ml-2 text-danger">(overdue)</span>}
         </Row>
         <Row label="Estimated time">{formatMinutes(task.estimatedMinutes)}</Row>
+        <Row label="Time studied">{formatMinutes(task.studiedMinutes || 0)}</Row>
+        {task.actualMinutes && <Row label="Actual time">{formatMinutes(task.actualMinutes)}</Row>}
         <Row label="Importance">{levelLabel(task.importance)}</Row>
         <Row label="Difficulty">{levelLabel(task.difficulty)}</Row>
         {task.createdAt && <Row label="Created">{format(task.createdAt, "MMM d, yyyy")}</Row>}

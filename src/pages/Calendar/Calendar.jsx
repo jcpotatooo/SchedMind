@@ -65,7 +65,7 @@ export default function Calendar() {
               return (
                 <button key={d.toISOString()} type="button" onClick={() => setSelected(d)} aria-pressed={isSel}
                   aria-label={format(d, "EEEE, MMMM d")}
-                  className={`flex h-14 flex-col items-center justify-start rounded-xl pt-1.5 text-sm transition ${
+                  className={`flex min-h-12 h-auto flex-col items-center justify-start rounded-xl py-1 text-xs transition sm:h-14 sm:pt-1.5 sm:text-sm ${
                     isSel ? "bg-brand-500 text-white" : isToday(d) ? "bg-brand-50 font-bold text-brand-700" : "hover:bg-page"
                   } ${isSameMonth(d, month) ? "" : "opacity-40"}`}>
                   {format(d, "d")}
