@@ -48,3 +48,12 @@ export function capacityMinutes(slots, deadlineMs) {
   }
   return count * SLOT_MINUTES;
 }
+
+// Study time that is already used by a session the student marked Done or Missed
+// must stay used. Without this, marking a session Done would free its slot and the
+// planner would put a new session in the very same time.
+export function removeBlocked(slots, sessions, nowMs) {
+  const blocked = (sessions || []).filter((s) => s.status !== "planned" && s.end > nowMs);
+  if (blocked.length === 0) return slots;
+  return slots.filter((slot) => !blocked.some((s) => slot.start < s.end && slot.end > s.start));
+}

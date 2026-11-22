@@ -1,4 +1,4 @@
-import { SLOT_MINUTES, buildSlots } from "./time.js";
+import { SLOT_MINUTES, buildSlots, removeBlocked } from "./time.js";
 import { rankTasks } from "./priority.js";
 
 // SMART SCHEDULING (rule-based greedy algorithm, NOT machine learning).
@@ -19,11 +19,15 @@ import { rankTasks } from "./priority.js";
 //    Take a short break between sessions; breaks are not scheduled, so no study time is wasted.
 // 7. Anything that does not fit is reported as "unscheduled" (with the missing minutes).
 //
+// AI HINTS (optional): when `hints` is given, the AI's priority and time estimates are blended
+// into step 2 (see aiHints.js). The AI never picks times, so steps 3-7 stay the same.
+//
 // mode "rescue": ordering becomes overdue first, then nearest deadline first (EDF),
 // the safest way to save as many deadlines as possible.
-export function generateSchedule({ tasks, settings, behavior, now = new Date(), mode = "normal", extraMinutes = 0 }) {
-  const slots = buildSlots(settings, now, extraMinutes);
-  const { list, byId } = rankTasks({ tasks, slots, behavior, now });
+export function generateSchedule({ tasks, settings, behavior, now = new Date(), mode = "normal", extraMinutes = 0, existingSessions = [], hints = null }) {
+  // Slots already used by Done/Missed sessions are not offered again.
+  const slots = removeBlocked(buildSlots(settings, now, extraMinutes), existingSessions, now.getTime());
+  const { list, byId } = rankTasks({ tasks, slots, behavior, now, hints });
 
   // Number of slots that end on or before each task's deadline (a slot index limit).
   const slotLimit = new Map();
@@ -121,6 +125,7 @@ export function generateSchedule({ tasks, settings, behavior, now = new Date(), 
       status: "planned",
       autoMissed: false,
       peak: a.peak,
+      ai: !!item.ai,
       reason: "",
     });
   }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import {
-  Bell, CalendarDays, Sparkles, UserRound, ShieldCheck, Ellipsis, Flag, House, ListChecks, Settings, Target, Timer, TrendingUp, X,
+  Bell, CalendarDays, UserRound, ShieldCheck, Ellipsis, Flag, House, ListChecks, Settings, Target, Timer, TrendingUp, X,
 } from "lucide-react";
 import Logo from "./Logo.jsx";
 import LogoutButton from "../auth/LogoutButton.jsx";
@@ -17,7 +17,6 @@ const NAV_ITEMS = [
   { to: "/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/habits", label: "Habits", icon: Target },
   { to: "/focus", label: "Focus", icon: Timer },
-  { to: "/coach", label: "AI Coach", icon: Sparkles },
   { to: "/goals", label: "Goals", icon: Flag },
   { to: "/progress", label: "Progress", icon: TrendingUp },
   { to: "/notifications", label: "Notifications", icon: Bell },

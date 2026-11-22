@@ -5,11 +5,13 @@ import { useAuth } from "./AuthContext.jsx";
 import { useTasks } from "../hooks/useTasks.js";
 import { useUserCollection } from "../hooks/useUserCollection.js";
 import { friendlyError } from "../lib/authErrors.js";
+import { askScheduleAI } from "../services/aiService.js";
+import { buildAIRequest, cleanHints } from "../lib/plan/aiHints.js";
 import { saveSchedule } from "../services/scheduleService.js";
 import { createNotifications } from "../services/notificationService.js";
 import { buildNotifications } from "../lib/notifications.js";
 import { normalizeSettings } from "../lib/plan/settings.js";
-import { buildSlots } from "../lib/plan/time.js";
+import { buildSlots, removeBlocked } from "../lib/plan/time.js";
 import { computeBehavior } from "../lib/plan/behavior.js";
 import { rankTasks } from "../lib/plan/priority.js";
 import { assessRisks } from "../lib/plan/risk.js";
@@ -72,18 +74,23 @@ export function PlanProvider({ children }) {
   const mode = schedule?.mode || "normal";
 
   const behavior = useMemo(() => computeBehavior(tasks, sessions), [tasks, sessions]);
-  const slots = useMemo(() => buildSlots(settings, now, extraMinutes), [settings, now, extraMinutes]);
+  const slots = useMemo(
+    () => removeBlocked(buildSlots(settings, now, extraMinutes), sessions, now.getTime()),
+    [settings, now, extraMinutes, sessions]
+  );
 
+  // AI advice saved with the schedule (null when the schedule is rule-based only).
+  const aiInfo = schedule?.ai || null;
   const { ranking, priorityById } = useMemo(() => {
-    const { list, byId } = rankTasks({ tasks, slots, behavior, now });
+    const { list, byId } = rankTasks({ tasks, slots, behavior, now, hints: aiInfo?.hints });
     return { ranking: list, priorityById: byId };
-  }, [tasks, slots, behavior, now]);
+  }, [tasks, slots, behavior, now, aiInfo]);
   const riskById = useMemo(() => assessRisks({ tasks, slots, behavior, now }), [tasks, slots, behavior, now]);
   const rescue = useMemo(() => getRescueStatus({ tasks, riskById, sessions, now }), [tasks, riskById, sessions, now]);
 
   // Save a freshly generated schedule (first schedule, regenerate, rescue plan, auto-adjust).
   const applyGenerated = useCallback(
-    (gen, { mode: nextMode, extraMinutes: nextExtra, reasons }) => {
+    (gen, { mode: nextMode, extraMinutes: nextExtra, reasons, ai = null }) => {
       const data = buildScheduleDoc({
         tasks,
         settings,
@@ -92,6 +99,7 @@ export function PlanProvider({ children }) {
         mode: nextMode,
         extraMinutes: nextExtra,
         reasons,
+        ai,
         now: new Date(),
       });
       return saveSchedule(user.uid, data);
@@ -100,18 +108,46 @@ export function PlanProvider({ children }) {
   );
 
   const regenerate = useCallback(async () => {
-    const gen = generateSchedule({ tasks, settings, behavior, now: new Date(), mode, extraMinutes });
+    const gen = generateSchedule({ tasks, settings, behavior, now: new Date(), mode, extraMinutes, existingSessions: sessions });
     await applyGenerated(gen, {
       mode,
       extraMinutes,
       reasons: [schedule ? "You regenerated your schedule." : "Your first schedule was generated."],
     });
-  }, [tasks, settings, behavior, mode, extraMinutes, schedule, applyGenerated]);
+  }, [tasks, settings, behavior, mode, extraMinutes, schedule, sessions, applyGenerated]);
+
+  // AI-assisted schedule (hybrid): the AI gives priority/time advice per task, the planner
+  // places the sessions. If the AI is unavailable, the rule-based scheduler is used instead.
+  const regenerateWithAI = useCallback(async () => {
+    const nowDate = new Date();
+    const aiSlots = removeBlocked(buildSlots(settings, nowDate, extraMinutes), sessions, nowDate.getTime());
+    const base = rankTasks({ tasks, slots: aiSlots, behavior, now: nowDate });
+    let ai = null;
+    let error = "";
+    try {
+      if (base.list.length === 0) throw new Error("there are no unfinished tasks");
+      const request = buildAIRequest({ ranking: base.list, settings, behavior, now: nowDate });
+      const res = await askScheduleAI(request.context);
+      const hints = cleanHints(res.hints, request.sent);
+      if (Object.keys(hints).length === 0) throw new Error("the AI returned no usable decisions");
+      ai = { used: true, model: res.model || "", generatedAt: nowDate.getTime(), summary: res.summary || "", hints };
+    } catch (err) {
+      error = err.message || "unknown error";
+    }
+    const gen = generateSchedule({ tasks, settings, behavior, now: new Date(), mode, extraMinutes, existingSessions: sessions, hints: ai?.hints });
+    await applyGenerated(gen, {
+      mode,
+      extraMinutes,
+      ai,
+      reasons: [ai ? "You generated an AI-optimized schedule." : `AI was unavailable, so the rule-based scheduler was used (${error}).`],
+    });
+    return { usedAI: !!ai, error };
+  }, [tasks, settings, behavior, mode, extraMinutes, sessions, applyGenerated]);
 
   const endRescue = useCallback(async () => {
-    const gen = generateSchedule({ tasks, settings, behavior, now: new Date(), mode: "normal", extraMinutes: 0 });
+    const gen = generateSchedule({ tasks, settings, behavior, now: new Date(), mode: "normal", extraMinutes: 0, existingSessions: sessions });
     await applyGenerated(gen, { mode: "normal", extraMinutes: 0, reasons: ["Rescue Mode ended. Back to your normal schedule."] });
-  }, [tasks, settings, behavior, applyGenerated]);
+  }, [tasks, settings, behavior, sessions, applyGenerated]);
 
   // ---- AUTOMATIC SCHEDULE ADJUSTMENT (Feature 6) ----
   // Whenever something the plan depends on changes (task added/edited/deleted, deadline,
@@ -140,6 +176,8 @@ export function PlanProvider({ children }) {
           now: new Date(),
           mode: schedule.mode || "normal",
           extraMinutes: schedule.extraMinutes || 0,
+          existingSessions: marked.sessions,
+          hints: schedule.ai?.hints,
         });
         const allReasons = reasons.length ? reasons : [`You missed ${marked.newlyMissed} study session${marked.newlyMissed === 1 ? "" : "s"}.`];
         await saveSchedule(
@@ -152,6 +190,7 @@ export function PlanProvider({ children }) {
             mode: schedule.mode || "normal",
             extraMinutes: schedule.extraMinutes || 0,
             reasons: allReasons,
+            ai: schedule.ai || null,
             now: new Date(),
           })
         );
@@ -212,6 +251,8 @@ export function PlanProvider({ children }) {
     mode,
     extraMinutes,
     regenerate,
+    regenerateWithAI,
+    aiInfo,
     endRescue,
     applyGenerated,
     missedCount: countMissed(sessions),

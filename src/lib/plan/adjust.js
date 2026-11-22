@@ -105,10 +105,14 @@ export function summarizeMoves(oldPlanned, newPlanned) {
 
 // Builds the full document saved to Firestore (schedules/{uid}).
 // Old finished/missed sessions are kept as history (this is what Behavior Learning reads).
-export function buildScheduleDoc({ tasks, settings, schedule, gen, mode, extraMinutes, reasons, now }) {
+export function buildScheduleDoc({ tasks, settings, schedule, gen, mode, extraMinutes, reasons, now, ai = null }) {
   const nowMs = now.getTime();
   const { sessions: marked } = markPastSessions(schedule?.sessions || [], nowMs);
-  const history = marked.filter((s) => s.status !== "planned").slice(-200);
+  const seen = new Set();
+  const history = marked
+    .filter((s) => s.status !== "planned")
+    .filter((s) => (seen.has(s.id) ? false : seen.add(s.id)))
+    .slice(-200);
   const oldPlanned = marked.filter((s) => s.status === "planned");
   const sessions = [...history, ...gen.sessions];
 
@@ -121,5 +125,6 @@ export function buildScheduleDoc({ tasks, settings, schedule, gen, mode, extraMi
     inputs: snapshotInputs(tasks, settings, sessions, nowMs),
     changeLog: [entry, ...(schedule?.changeLog || [])].slice(0, 20),
     generatedAt: nowMs,
+    ai: ai || null, // AI advice used for this schedule (null = rule-based only)
   };
 }

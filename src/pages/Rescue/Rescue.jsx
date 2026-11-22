@@ -21,7 +21,7 @@ export default function Rescue() {
   const navigate = useNavigate();
   const {
     tasks, loading, settings, behavior, riskById, rescue, mode, extraMinutes: activeExtra,
-    schedule, applyGenerated, endRescue,
+    schedule, sessions, applyGenerated, endRescue,
   } = usePlan();
 
   const [extra, setExtra] = useState(60);
@@ -30,12 +30,12 @@ export default function Rescue() {
 
   // The proposed plan (NOT saved until the student accepts it).
   const proposal = useMemo(
-    () => generateSchedule({ tasks, settings, behavior, now: new Date(), mode: "rescue", extraMinutes: extra }),
-    [tasks, settings, behavior, extra]
+    () => generateSchedule({ tasks, settings, behavior, now: new Date(), mode: "rescue", extraMinutes: extra, existingSessions: sessions }),
+    [tasks, settings, behavior, extra, sessions]
   );
   const current = useMemo(
-    () => generateSchedule({ tasks, settings, behavior, now: new Date(), mode: "normal", extraMinutes: activeExtra }),
-    [tasks, settings, behavior, activeExtra]
+    () => generateSchedule({ tasks, settings, behavior, now: new Date(), mode: "normal", extraMinutes: activeExtra, existingSessions: sessions }),
+    [tasks, settings, behavior, activeExtra, sessions]
   );
 
   const workload = useMemo(() => {

@@ -1,6 +1,7 @@
 import { capacityMinutes } from "./time.js";
 import { remainingWork } from "./workload.js";
 import { fmtMin, timeText, isTaskOverdue } from "./format.js";
+import { hintRemaining, usableHint } from "./aiHints.js";
 
 // INTELLIGENT TASK PRIORITIZATION (rule-based, explainable).
 // Each task gets four scores from 0 to 100, then a weighted total:
@@ -29,7 +30,10 @@ const FACTOR_TEXT = {
   workload: "it needs more work compared with the time available",
 };
 
-export function rankTasks({ tasks, slots, behavior, now }) {
+// hints (optional) = advice from the AI scheduler, already checked by cleanHints().
+// The final score is 50% rule-based + 50% AI priority, and the AI's estimate of the
+// time still needed replaces the rule-based estimate (limited to 50%-200% of it).
+export function rankTasks({ tasks, slots, behavior, now, hints = null }) {
   const nowMs = now.getTime();
 
   const items = tasks
@@ -37,7 +41,9 @@ export function rankTasks({ tasks, slots, behavior, now }) {
     .map((task) => {
       const msLeft = task.deadline.getTime() - nowMs;
       const overdue = isTaskOverdue(task, nowMs);
-      const work = remainingWork(task, behavior);
+      let work = remainingWork(task, behavior);
+      const hint = usableHint(hints, task);
+      if (hint) work = { ...work, remaining: hintRemaining(hint, task) };
 
       // Study time before the deadline that we can realistically count on.
       const capacity = overdue ? 0 : capacityMinutes(slots, task.deadline.getTime()) * behavior.reliability;
@@ -49,12 +55,13 @@ export function rankTasks({ tasks, slots, behavior, now }) {
         difficulty: LEVEL_SCORE[task.difficulty] ?? 67,
         workload: Math.round(workloadPressure),
       };
-      const score = Math.round(
+      const ruleScore = Math.round(
         WEIGHTS.urgency * comps.urgency +
           WEIGHTS.importance * comps.importance +
           WEIGHTS.difficulty * comps.difficulty +
           WEIGHTS.workload * comps.workload
       );
+      const score = hint ? Math.round(0.5 * ruleScore + 0.5 * hint.p) : ruleScore;
       const level = overdue || score >= 65 ? "High" : score >= 40 ? "Medium" : "Low";
 
       // Plain-language reasons (Feature 7: explainable recommendations).
@@ -71,7 +78,9 @@ export function rankTasks({ tasks, slots, behavior, now }) {
         reasons.push(`Your past tasks took ${behavior.estimationFactor}× your estimates, so extra time is included.`);
       if (work.overrun) reasons.push("You already studied longer than estimated, so extra time is reserved.");
 
-      return { task, score, level, overdue, comps, reasons, work, capacity, rank: 0, rankNote: null };
+      if (hint && hint.r) reasons.unshift(`AI: ${hint.r}`);
+
+      return { task, score, level, overdue, comps, reasons, work, capacity, rank: 0, rankNote: null, ai: hint ? { priority: hint.p, ruleScore } : null };
     });
 
   items.sort((a, b) => b.score - a.score || a.task.deadline - b.task.deadline);

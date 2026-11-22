@@ -32,7 +32,7 @@ export default function Schedule() {
   const { user } = useAuth();
   const {
     tasks, loading, error, schedule, scheduleLoading, scheduleError, sessions, behavior,
-    ranking, riskById, rescue, mode, extraMinutes, usingDefaultSettings, regenerate, endRescue,
+    ranking, riskById, rescue, mode, extraMinutes, usingDefaultSettings, regenerate, regenerateWithAI, aiInfo, endRescue,
   } = usePlan();
 
   const [busy, setBusy] = useState(false);
@@ -51,6 +51,24 @@ export default function Schedule() {
     try {
       await action();
       setNotice({ type: "success", text: successText });
+    } catch (err) {
+      setNotice({ type: "error", text: friendlyError(err) || "Something went wrong." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // AI-assisted generation. If the AI is unavailable, the rule-based schedule is created
+  // instead and the reason (including the error code) is shown.
+  async function runAI() {
+    setBusy(true);
+    try {
+      const result = await regenerateWithAI();
+      setNotice(
+        result.usedAI
+          ? { type: "success", text: "AI-optimized schedule created." }
+          : { type: "info", text: `The AI was unavailable (${result.error}). A rule-based schedule was created instead.` }
+      );
     } catch (err) {
       setNotice({ type: "error", text: friendlyError(err) || "Something went wrong." });
     } finally {
@@ -100,10 +118,16 @@ export default function Schedule() {
           </p>
         </div>
         {schedule && (
-          <button type="button" onClick={() => run(regenerate, "Schedule regenerated.")} disabled={busy}
-            className="inline-flex h-11 shrink-0 items-center gap-2 rounded-2xl border border-ink-100 bg-white px-4 text-sm font-semibold transition hover:bg-page disabled:opacity-60">
-            <RotateCcw size={16} /> Regenerate
-          </button>
+          <div className="flex shrink-0 flex-wrap justify-end gap-2">
+            <button type="button" onClick={runAI} disabled={busy}
+              className="inline-flex h-11 items-center gap-2 rounded-2xl bg-brand-500 px-4 text-sm font-semibold text-white shadow-card transition hover:bg-brand-600 disabled:opacity-60">
+              <Sparkles size={16} /> {busy ? "Working..." : "Generate with AI"}
+            </button>
+            <button type="button" onClick={() => run(regenerate, "Schedule regenerated (rules only).")} disabled={busy}
+              className="inline-flex h-11 items-center gap-2 rounded-2xl border border-ink-100 bg-white px-4 text-sm font-semibold transition hover:bg-page disabled:opacity-60">
+              <RotateCcw size={16} /> Rules only
+            </button>
+          </div>
         )}
       </div>
 
@@ -142,9 +166,27 @@ export default function Schedule() {
         ) : !schedule ? (
           <EmptyState icon={Sparkles} title="Create your first schedule"
             text={`You have ${openTasks.length} unfinished task${openTasks.length === 1 ? "" : "s"}. SchedMind will fit study sessions into your free hours, most important first.`}
-            action={<Button loading={busy} onClick={() => run(regenerate, "Your schedule is ready.")} className="px-6">Generate my schedule</Button>} />
+            action={
+              <div className="flex flex-col items-center gap-2">
+                <Button loading={busy} onClick={runAI} className="px-6"><Sparkles size={16} /> Generate with AI</Button>
+                <button type="button" disabled={busy} onClick={() => run(regenerate, "Your schedule is ready.")}
+                  className="text-sm font-semibold text-ink-500 underline">Without AI (rules only)</button>
+              </div>} />
         ) : (
           <>
+            {aiInfo?.used ? (
+              <div className="mb-4 rounded-2xl bg-brand-50 p-4 text-sm text-brand-800">
+                <p className="flex items-center gap-2 font-semibold"><Sparkles size={16} /> AI-optimized schedule</p>
+                {aiInfo.summary && <p className="mt-1">{aiInfo.summary}</p>}
+                <p className="mt-1 text-xs text-ink-500">
+                  The AI ({aiInfo.model || "Gemini"}) advises on priority and time needed. SchedMind's planner then places every session,
+                  so sessions never overlap, stay inside your study hours and finish before deadlines.
+                </p>
+              </div>
+            ) : (
+              <p className="mb-4 text-xs text-ink-500">This schedule uses SchedMind's rule-based planner. Press “Generate with AI” for AI advice.</p>
+            )}
+
             {schedule.unscheduled?.length > 0 && (
               <div className="mb-4 rounded-2xl bg-amber-50 p-4 text-sm text-amber-800">
                 <p className="font-semibold">Not enough study time for everything</p>
@@ -171,7 +213,10 @@ export default function Schedule() {
                         <li key={s.id} className="rounded-2xl bg-surface p-4 shadow-card">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <p className="truncate font-semibold">{s.taskTitle}</p>
+                              <p className="truncate font-semibold">
+                                {s.taskTitle}
+                                {s.ai && <span className="ml-2 rounded-full bg-brand-50 px-2 py-0.5 align-middle text-[10px] font-bold text-brand-700">AI</span>}
+                              </p>
                               <p className="text-xs text-ink-500">
                                 {format(s.start, "h:mm a")} – {format(s.end, "h:mm a")} · {fmtMin(s.minutes)} · {s.category}
                               </p>
