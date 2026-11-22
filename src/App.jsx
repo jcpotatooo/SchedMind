@@ -13,6 +13,7 @@ import Focus from "./pages/Focus/Focus.jsx";
 import Goals from "./pages/Goals/Goals.jsx";
 import Progress from "./pages/Progress/Progress.jsx";
 import Profile from "./pages/Profile/Profile.jsx";
+import Coach from "./pages/Coach/Coach.jsx";
 import Admin from "./pages/Admin/Admin.jsx";
 import Notifications from "./pages/Notifications/Notifications.jsx";
 import AppLayout from "./components/layout/AppLayout.jsx";
@@ -44,6 +45,7 @@ export default function App() {
           <Route path="/goals" element={<Goals />} />
           <Route path="/progress" element={<Progress />} />
           <Route path="/notifications" element={<Notifications />} />
+          <Route path="/coach" element={<Coach />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/settings" element={<Settings />} />
         </Route>
