@@ -4,7 +4,10 @@
 // WHY A SERVER: the Gemini API key must never be in the browser. It lives only in Vercel's
 // Environment Variables (GEMINI_API_KEY). Every request needs a valid Firebase login token.
 
-const MODELS = [...new Set([process.env.GEMINI_MODEL, "gemini-2.5-flash", "gemini-flash-latest"].filter(Boolean))];
+// If one model is overloaded (503) or unavailable (404), the next one is tried.
+// The "lite" model runs on separate capacity, so it usually still answers when the main one is busy.
+const MODELS = [...new Set([process.env.GEMINI_MODEL, "gemini-2.5-flash", "gemini-flash-latest", "gemini-2.5-flash-lite"].filter(Boolean))];
+export const config = { maxDuration: 30 }; // allow time for fallbacks on Vercel
 const LIMIT_PER_HOUR = 12;
 const MAX_CONTEXT = 20000;
 const hits = new Map(); // uid -> timestamps (best-effort limit per server instance)
@@ -105,6 +108,7 @@ export default async function handler(req, res) {
     let reply = null;
     let usedModel = "";
     let lastError = "";
+    let lastStatus = 0;
     for (const model of MODELS) {
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
         method: "POST",
@@ -125,11 +129,14 @@ export default async function handler(req, res) {
       }
       console.error("Gemini error", model, r.status, message.slice(0, 300));
       lastError = `Gemini ${r.status}: ${message.replace(/\s+/g, " ").slice(0, 140)}`;
-      if (r.status === 404) continue; // model name not available: try the next one
-      if (r.status === 429) return res.status(429).json({ error: `The AI service is busy or over its free limit (${lastError})` });
-      return res.status(502).json({ error: `The AI service returned an error (${lastError})` });
+      lastStatus = r.status;
+      // Busy, overloaded, missing model or server hiccup: try the next model.
+      if ([404, 429, 500, 503].includes(r.status)) continue;
+      return res.status(502).json({ error: lastError }); // 400/403 etc.: another model will not help
     }
-    if (!reply) return res.status(502).json({ error: `No AI model was available (${lastError})` });
+    if (!reply) {
+      return res.status(lastStatus === 429 ? 429 : 502).json({ error: `${lastError} (tried ${MODELS.length} models; please try again in a minute)` });
+    }
 
     const text = reply.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || "";
     const parsed = parseJson(text);

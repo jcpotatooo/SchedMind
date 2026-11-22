@@ -139,7 +139,7 @@ export function PlanProvider({ children }) {
       mode,
       extraMinutes,
       ai,
-      reasons: [ai ? "You generated an AI-optimized schedule." : `AI was unavailable, so the rule-based scheduler was used (${error}).`],
+      reasons: [ai ? "You generated an AI-optimized schedule." : `The AI was unavailable (${error}), so the rule-based scheduler was used.`],
     });
     return { usedAI: !!ai, error };
   }, [tasks, settings, behavior, mode, extraMinutes, sessions, applyGenerated]);

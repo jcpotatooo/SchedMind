@@ -32,7 +32,7 @@ export default function Schedule() {
   const { user } = useAuth();
   const {
     tasks, loading, error, schedule, scheduleLoading, scheduleError, sessions, behavior,
-    ranking, riskById, rescue, mode, extraMinutes, usingDefaultSettings, regenerate, regenerateWithAI, aiInfo, endRescue,
+    ranking, riskById, rescue, now, mode, extraMinutes, usingDefaultSettings, regenerate, regenerateWithAI, aiInfo, endRescue,
   } = usePlan();
 
   const [busy, setBusy] = useState(false);
@@ -103,6 +103,11 @@ export default function Schedule() {
     });
     return groups;
   }, [sessions]);
+
+  // Tasks that are NOT marked Done but whose planned study time is already used up
+  // (studied >= estimate + the one extra reserve). They have no sessions left, so tell the student why.
+  const plannedTaskIds = new Set(sessions.filter((s) => s.status === "planned" && s.end > now.getTime()).map((s) => s.taskId));
+  const usedUp = ranking.filter((i) => i.work.remaining === 0 && (i.task.studiedMinutes || 0) > 0 && !plannedTaskIds.has(i.task.id));
 
   const shownDays = showAll ? days : days.slice(0, 7);
   const openTasks = tasks.filter((t) => t.status !== "done");
@@ -185,6 +190,18 @@ export default function Schedule() {
               </div>
             ) : (
               <p className="mb-4 text-xs text-ink-500">This schedule uses SchedMind's rule-based planner. Press “Generate with AI” for AI advice.</p>
+            )}
+
+            {usedUp.length > 0 && (
+              <div className="mb-4 rounded-2xl bg-blue-50 p-4 text-sm text-blue-800">
+                <p className="font-semibold">Planned study time used up</p>
+                <ul className="mt-1 list-disc pl-5">
+                  {usedUp.map((i) => (
+                    <li key={i.task.id}>“{i.task.title}”: you studied {fmtMin(i.task.studiedMinutes)}, which covers your estimate plus extra time.</li>
+                  ))}
+                </ul>
+                <p className="mt-1">If it is finished, mark it Done in <Link to="/tasks" className="font-semibold underline">Tasks</Link>. If not, raise its estimated time there and the schedule will add sessions.</p>
+              </div>
             )}
 
             {schedule.unscheduled?.length > 0 && (
