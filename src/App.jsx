@@ -4,6 +4,17 @@ import Register from "./pages/auth/Register.jsx";
 import ForgotPassword from "./pages/auth/ForgotPassword.jsx";
 import Dashboard from "./pages/Dashboard/Dashboard.jsx";
 import Tasks from "./pages/Tasks/Tasks.jsx";
+import Schedule from "./pages/Schedule/Schedule.jsx";
+import Rescue from "./pages/Rescue/Rescue.jsx";
+import Settings from "./pages/Settings/Settings.jsx";
+import Calendar from "./pages/Calendar/Calendar.jsx";
+import Habits from "./pages/Habits/Habits.jsx";
+import Focus from "./pages/Focus/Focus.jsx";
+import Goals from "./pages/Goals/Goals.jsx";
+import Progress from "./pages/Progress/Progress.jsx";
+import Profile from "./pages/Profile/Profile.jsx";
+import Admin from "./pages/Admin/Admin.jsx";
+import Notifications from "./pages/Notifications/Notifications.jsx";
 import AppLayout from "./components/layout/AppLayout.jsx";
 import { ProtectedRoute, PublicRoute } from "./components/auth/ProtectedRoute.jsx";
 
@@ -25,6 +36,23 @@ export default function App() {
         <Route element={<AppLayout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/tasks" element={<Tasks />} />
+          <Route path="/schedule" element={<Schedule />} />
+          <Route path="/rescue" element={<Rescue />} />
+          <Route path="/calendar" element={<Calendar />} />
+          <Route path="/habits" element={<Habits />} />
+          <Route path="/focus" element={<Focus />} />
+          <Route path="/goals" element={<Goals />} />
+          <Route path="/progress" element={<Progress />} />
+          <Route path="/notifications" element={<Notifications />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/settings" element={<Settings />} />
+        </Route>
+      </Route>
+
+      {/* Admin only: students are redirected home, and Firestore rules block the data too. */}
+      <Route element={<ProtectedRoute requireAdmin />}>
+        <Route element={<AppLayout />}>
+          <Route path="/admin" element={<Admin />} />
         </Route>
       </Route>
 

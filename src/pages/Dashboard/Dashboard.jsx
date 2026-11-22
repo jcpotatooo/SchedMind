@@ -2,11 +2,15 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { AlertCircle, Clock, Flame, Hourglass, ListChecks, Plus } from "lucide-react";
+import { CalendarDays, Clock, Flame, LifeBuoy, ListChecks, Plus, Target, Timer } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
-import { useTasks } from "../../hooks/useTasks.js";
-import { computeDashboardStats, greeting } from "../../lib/dashboardStats.js";
-import { formatMinutes, isOverdue, statusInfo } from "../../lib/taskConstants.js";
+import { usePlan } from "../../context/PlanContext.jsx";
+import { PriorityChip } from "../../components/plan/Chips.jsx";
+import { greeting } from "../../lib/dashboardStats.js";
+import { computeProgress } from "../../lib/activity.js";
+import { habitStats } from "../../lib/habits.js";
+import { isOverdue, statusInfo } from "../../lib/taskConstants.js";
+import { fmtMin } from "../../lib/plan/format.js";
 import Alert from "../../components/ui/Alert.jsx";
 import EmptyState from "../../components/ui/EmptyState.jsx";
 import Spinner from "../../components/ui/Spinner.jsx";
@@ -14,10 +18,23 @@ import Spinner from "../../components/ui/Spinner.jsx";
 const COLORS = { done: "#2dc4b2", inProgress: "#3b6fd8", todo: "#e2e8f0" };
 
 export default function Dashboard() {
-  const { user, displayName } = useAuth();
-  const { tasks, loading, error } = useTasks(user.uid);
-  const stats = useMemo(() => computeDashboardStats(tasks), [tasks]);
-  const now = new Date();
+  const { displayName } = useAuth();
+  const { tasks, loading, error, ranking, rescue, sessions, focusSessions, habits, habitLogs, now } = usePlan();
+  const progress = useMemo(() => computeProgress({ tasks, focusSessions, sessions, now }), [tasks, focusSessions, sessions, now]);
+  const hs = useMemo(() => habitStats(habits, habitLogs, now), [habits, habitLogs, now]);
+  // Shape used by the cards and charts below (all from real records).
+  const stats = {
+    total: progress.counts.total, doneCount: progress.counts.done, inProgressCount: progress.counts.inProgress,
+    todoCount: progress.counts.todo, completionPercent: progress.completionPercent, week: progress.week,
+    weekTotal: progress.weekTasksDone,
+  };
+
+  // Upcoming = unfinished tasks ranked by the smart priority score (not just deadline).
+  const upcoming = ranking.slice(0, 5);
+  // Next planned study session that has not ended yet.
+  const nextSession = [...sessions]
+    .filter((s) => s.status === "planned" && s.end > now.getTime())
+    .sort((a, b) => a.start - b.start)[0];
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6">
@@ -35,10 +52,37 @@ export default function Dashboard() {
           {/* Statistic cards */}
           <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
             <StatCard icon={ListChecks} color="bg-brand-500" value={stats.doneCount} label="Tasks done" />
-            <StatCard icon={AlertCircle} color="bg-danger" value={stats.overdueCount} label="Overdue" />
-            <StatCard icon={Hourglass} color="bg-accent-purple" value={formatMinutes(stats.remainingMinutes)} label="Work remaining" />
-            <StatCard icon={Flame} color="bg-accent-orange" value={`${stats.bestStreak}d`} label="Best streak" />
+            <StatCard icon={Target} color="bg-accent-blue" value={`${hs.doneToday}/${hs.total}`} label="Habits today" />
+            <StatCard icon={Timer} color="bg-accent-purple" value={progress.weekFocusMinutes} label="Focus mins (7 days)" />
+            <StatCard icon={Flame} color="bg-accent-orange" value={`${progress.streak.current}d`} label="Study streak" />
           </div>
+
+          {rescue.needed && (
+            <Link to="/rescue" className="mt-6 flex items-start gap-3 rounded-2xl bg-red-50 p-4 text-sm text-red-700 transition hover:bg-red-100">
+              <LifeBuoy size={20} className="mt-0.5 shrink-0" />
+              <span>
+                <strong>You may be falling behind.</strong>{" "}
+                {[
+                  rescue.overdue.length && `${rescue.overdue.length} overdue`,
+                  rescue.highRisk.length && `${rescue.highRisk.length} high-risk`,
+                  rescue.recentMissed >= 2 && `${rescue.recentMissed} missed sessions`,
+                ].filter(Boolean).join(", ")}. Open Rescue Mode.
+              </span>
+            </Link>
+          )}
+
+          {nextSession && (
+            <Link to="/schedule" className="mt-4 flex items-center gap-3 rounded-2xl bg-surface p-4 shadow-card transition hover:shadow-soft">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600"><CalendarDays size={20} /></div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Next study session</p>
+                <p className="truncate font-semibold">{nextSession.taskTitle}</p>
+                <p className="text-xs text-ink-500">
+                  {format(nextSession.start, "EEE, MMM d · h:mm a")} · {fmtMin(nextSession.minutes)}
+                </p>
+              </div>
+            </Link>
+          )}
 
           <div className="mt-6 grid gap-6 lg:grid-cols-5">
             {/* Weekly chart */}
@@ -47,21 +91,22 @@ export default function Dashboard() {
                 <h2 className="font-bold">This Week</h2>
                 <span className="text-xs text-ink-500">{stats.weekTotal} tasks done</span>
               </div>
-              <p className="text-xs text-ink-500">Tasks completed per day</p>
+              <p className="text-xs text-ink-500">Study minutes and tasks completed per day</p>
               <div className="mt-4 h-48">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={stats.week} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                     <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#64748b" }} />
                     <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#64748b" }} />
-                    <Tooltip cursor={{ fill: "#f8fafc" }} formatter={(v) => [v, "Tasks done"]} />
-                    <Bar dataKey="tasksDone" fill={COLORS.done} radius={[6, 6, 0, 0]} maxBarSize={32} />
+                    <Tooltip cursor={{ fill: "#f8fafc" }} />
+                    <Bar dataKey="studyMinutes" name="Study minutes" fill={COLORS.done} radius={[6, 6, 0, 0]} maxBarSize={24} />
+                    <Bar dataKey="tasksDone" name="Tasks done" fill={COLORS.inProgress} radius={[6, 6, 0, 0]} maxBarSize={24} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              {stats.weekTotal === 0 && (
+              {stats.weekTotal === 0 && progress.week.every((d) => d.studyMinutes === 0) && (
                 <p className="mt-2 text-center text-xs text-ink-500">
-                  No completed tasks in the last 7 days yet. Mark a task Done to see it here.
+                  No activity in the last 7 days yet. Finish a focus session or mark a task Done.
                 </p>
               )}
             </section>
@@ -113,7 +158,7 @@ export default function Dashboard() {
               <h2 className="font-bold">Upcoming Tasks</h2>
               <Link to="/tasks" className="text-sm font-semibold text-brand-600 hover:text-brand-700">View all</Link>
             </div>
-            {stats.upcoming.length === 0 ? (
+            {upcoming.length === 0 ? (
               <EmptyState icon={ListChecks}
                 title={tasks.length ? "You're all caught up!" : "No tasks yet"}
                 text={tasks.length ? "Every task is done. Nice work." : "Add your first task to see it here."}
@@ -124,14 +169,15 @@ export default function Dashboard() {
                 )} />
             ) : (
               <div className="space-y-3">
-                {stats.upcoming.map((task) => (
+                {upcoming.map(({ task, level }) => (
                   <Link key={task.id} to="/tasks"
                     className="flex items-center gap-3 rounded-2xl bg-surface p-4 shadow-card transition hover:shadow-soft">
-                    <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${urgencyDot(task, now)}`} aria-hidden="true" />
+                    <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${levelDot(level)}`} aria-hidden="true" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-semibold">{task.title}</p>
-                      <p className="text-xs text-ink-500">
-                        {task.category}{task.subject ? ` · ${task.subject}` : ""} · {statusInfo(task.status).label}
+                      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-500">
+                        <span>{task.category}{task.subject ? ` · ${task.subject}` : ""} · {statusInfo(task.status).label}</span>
+                        <PriorityChip level={level} />
                       </p>
                     </div>
                     <span className={`flex shrink-0 items-center gap-1 text-xs ${isOverdue(task, now) ? "font-semibold text-danger" : "text-ink-500"}`}>
@@ -148,11 +194,10 @@ export default function Dashboard() {
   );
 }
 
-// Interim urgency color: red = overdue, orange = due within 48 hours, teal = later.
-// Phase 3 replaces this with the real priority level and an explanation.
-function urgencyDot(task, now) {
-  if (isOverdue(task, now)) return "bg-danger";
-  if (task.deadline - now < 48 * 60 * 60 * 1000) return "bg-accent-orange";
+// Dot color = smart priority level (High red, Medium orange, Low teal).
+function levelDot(level) {
+  if (level === "High") return "bg-danger";
+  if (level === "Medium") return "bg-accent-orange";
   return "bg-brand-500";
 }
 

@@ -24,7 +24,9 @@ export async function addTask(userId, data) {
     importance: data.importance,
     estimatedMinutes: data.estimatedMinutes,
     deadline: Timestamp.fromDate(data.deadline),
-    // Phase 3 (behavior learning) will fill actualMinutes when a task is finished.
+    // studiedMinutes = minutes from study sessions marked Done (Phase 3).
+    // actualMinutes = total time the task really took, saved when it is finished.
+    studiedMinutes: 0,
     actualMinutes: null,
     completedAt: data.status === "done" ? serverTimestamp() : null,
     createdAt: serverTimestamp(),
@@ -40,6 +42,8 @@ export async function updateTask(task, changes) {
   if (changes.status && changes.status !== task.status) {
     // Remember WHEN it was finished (used later for progress charts and streaks).
     next.completedAt = changes.status === "done" ? serverTimestamp() : null;
+    // Behavior Learning compares this with the estimate (only if study time was logged).
+    next.actualMinutes = changes.status === "done" && task.studiedMinutes > 0 ? task.studiedMinutes : null;
   }
   await updateDoc(doc(db, "tasks", task.id), next);
 }

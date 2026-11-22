@@ -19,9 +19,7 @@ export default function Login() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const busy = loading || googleLoading;
 
-  // NOTE: after a successful login we don't navigate manually. <PublicRoute>
-  // notices the user is logged in and redirects to the dashboard (or the page
-  // they originally wanted).
+
   async function handleSubmit(e) {
     e.preventDefault();
     const next = {

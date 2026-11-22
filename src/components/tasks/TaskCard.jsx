@@ -1,4 +1,5 @@
 import { Clock, Pencil, Trash2, Hourglass } from "lucide-react";
+import { PriorityChip, RiskChip } from "../plan/Chips.jsx";
 import {
   STATUSES,
   statusInfo,
@@ -9,7 +10,7 @@ import {
 } from "../../lib/taskConstants.js";
 
 // One task in the list. Title opens the details dialog.
-export default function TaskCard({ task, onOpen, onEdit, onDelete, onStatusChange }) {
+export default function TaskCard({ task, priority, risk, onOpen, onEdit, onDelete, onStatusChange }) {
   const overdue = isOverdue(task);
   const status = statusInfo(task.status);
   const done = task.status === "done";
@@ -31,6 +32,8 @@ export default function TaskCard({ task, onOpen, onEdit, onDelete, onStatusChang
               {task.category}
             </span>
             {task.subject && <span>{task.subject}</span>}
+            {priority && !done && <PriorityChip level={priority.level} />}
+            {risk && !done && risk.level !== "Low" && <RiskChip level={risk.level} />}
             {overdue && (
               <span className="rounded-full bg-red-50 px-2 py-0.5 font-medium text-red-700">Overdue</span>
             )}

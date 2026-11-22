@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 import Modal from "../ui/Modal.jsx";
 import Button from "../ui/Button.jsx";
+import { PriorityChip, RiskChip } from "../plan/Chips.jsx";
 import {
   statusInfo,
   isOverdue,
@@ -19,7 +20,7 @@ function Row({ label, children }) {
 }
 
 // Read-only "view task details" dialog with shortcuts to edit / delete.
-export default function TaskDetails({ task, onClose, onEdit, onDelete }) {
+export default function TaskDetails({ task, priority, risk, onClose, onEdit, onDelete }) {
   return (
     <Modal title="Task details" onClose={onClose}>
       <h3 className="text-lg font-bold">{task.title}</h3>
@@ -38,6 +39,25 @@ export default function TaskDetails({ task, onClose, onEdit, onDelete }) {
         {task.createdAt && <Row label="Created">{format(task.createdAt, "MMM d, yyyy")}</Row>}
         {task.completedAt && <Row label="Completed">{format(task.completedAt, "MMM d, yyyy · h:mm a")}</Row>}
       </dl>
+
+      {priority && task.status !== "done" && (
+        <div className="mt-4 rounded-2xl bg-page p-4 text-sm text-ink-700">
+          <div className="mb-2 flex flex-wrap gap-2">
+            <PriorityChip level={priority.level} />
+            {risk && <RiskChip level={risk.level} />}
+          </div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Why this priority</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5">
+            {priority.reasons.map((r) => <li key={r}>{r}</li>)}
+          </ul>
+          {priority.rankNote && <p className="mt-2">{priority.rankNote}</p>}
+          {risk && (
+            <p className="mt-3">
+              <strong>Risk:</strong> {risk.explanation} <strong>Suggested action:</strong> {risk.action}
+            </p>
+          )}
+        </div>
+      )}
 
       {task.description && (
         <div className="mt-4 rounded-2xl bg-page p-4 text-sm text-ink-700">

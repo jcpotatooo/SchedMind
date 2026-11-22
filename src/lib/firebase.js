@@ -1,6 +1,3 @@
-// Firebase setup. All keys come from the .env file (see .env.example).
-// Note: Firebase web config values are NOT secrets (they identify your project).
-// What actually protects your data are the Firestore Security Rules (firestore.rules).
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
@@ -14,7 +11,7 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-// If any value is missing we show a friendly setup screen instead of a blank page.
+
 const missing = Object.entries(firebaseConfig)
   .filter(([, value]) => !value)
   .map(([key]) => key);

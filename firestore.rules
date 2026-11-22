@@ -19,6 +19,11 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
+    // A display name, when present, must be 1-50 characters.
+    function validName(d) {
+      return !('name' in d) || (d.name is string && d.name.size() > 0 && d.name.size() <= 50);
+    }
+
     // ---------- users/{uid} ----------
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
@@ -26,15 +31,17 @@ service cloud.firestore {
       // A student may only create THEIR OWN profile, and only as "student".
       allow create: if isOwner(userId)
         && request.resource.data.uid == userId
-        && request.resource.data.role == 'student';
+        && request.resource.data.role == 'student'
+        && validName(request.resource.data);
 
       // Students can edit their profile but can't change their role or uid.
       allow update: if (isOwner(userId)
           && request.resource.data.role == resource.data.role
-          && request.resource.data.uid == resource.data.uid)
-        || isAdmin();
+          && request.resource.data.uid == resource.data.uid
+          && validName(request.resource.data));
 
-      allow delete: if isAdmin();
+      // Nobody can delete a profile from the app.
+      allow delete: if false;
     }
 
     // ---------- tasks/{taskId} ----------
@@ -65,6 +72,83 @@ service cloud.firestore {
       allow delete: if signedIn() && resource.data.userId == request.auth.uid;
     }
 
-    // Everything else is blocked until we add rules for it in later phases.
+    // ---------- schedules/{uid} (one document per student, Phase 3) ----------
+    match /schedules/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update: if isOwner(userId)
+        && request.resource.data.userId == userId
+        && request.resource.data.sessions is list
+        && request.resource.data.sessions.size() <= 1000;
+      allow delete: if isOwner(userId);
+    }
+
+    // ---------- habits/{id} and habitLogs/{habitId_date} (Phase 4) ----------
+    match /habits/{habitId} {
+      allow read: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60;
+      allow update: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60;
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    match /habitLogs/{logId} {
+      allow read: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      // The id must be habitId_date, so a habit can only be counted once per day.
+      allow create, update: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && logId == request.resource.data.habitId + '_' + request.resource.data.date;
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // ---------- goals/{id} ----------
+    function validGoal(g) {
+      return g.title is string && g.title.size() > 0 && g.title.size() <= 100
+        && g.targetDate is timestamp
+        && g.weeklyTargetMinutes is int && g.weeklyTargetMinutes > 0 && g.weeklyTargetMinutes <= 4200
+        && g.status in ['active', 'completed'];
+    }
+
+    match /goals/{goalId} {
+      allow read: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid && validGoal(request.resource.data);
+      allow update: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == resource.data.userId
+        && validGoal(request.resource.data);
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // ---------- focusSessions/{id} (saved once, never edited) ----------
+    match /focusSessions/{sessionId} {
+      allow read: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.minutes is int
+        && request.resource.data.minutes >= 1 && request.resource.data.minutes <= 600
+        && request.resource.data.completed is bool;
+    }
+
+    // ---------- notifications/{uid_key} ----------
+    match /notifications/{notificationId} {
+      allow read: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      // The id must be uid_key, so the same reminder can never be created twice.
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && notificationId == request.auth.uid + '_' + request.resource.data.key;
+      // The only thing a student can change is the "read" flag.
+      allow update: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+    }
+
+    // Everything else (any other collection) is blocked.
+    // Admins can READ users, tasks, schedules, habits, goals, focus sessions and
+    // notifications, but cannot edit or delete student study data.
   }
 }

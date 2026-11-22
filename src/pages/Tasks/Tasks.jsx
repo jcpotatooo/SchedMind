@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ClipboardList, Plus, Search, SearchX } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
-import { useTasks } from "../../hooks/useTasks.js";
+import { usePlan } from "../../context/PlanContext.jsx";
 import { addTask, updateTask, deleteTask } from "../../services/taskService.js";
 import { CATEGORIES, STATUSES } from "../../lib/taskConstants.js";
 import { friendlyError } from "../../lib/authErrors.js";
@@ -23,7 +23,7 @@ const SORTS = {
 
 export default function Tasks() {
   const { user } = useAuth();
-  const { tasks, loading, error } = useTasks(user.uid);
+  const { tasks, loading, error, priorityById, riskById } = usePlan();
 
   // Filters
   const [search, setSearch] = useState("");
@@ -181,6 +181,7 @@ export default function Tasks() {
             <div className="space-y-3">
               {visibleTasks.map((task) => (
                 <TaskCard key={task.id} task={task}
+                  priority={priorityById[task.id]} risk={riskById[task.id]}
                   onOpen={(t) => setViewingId(t.id)}
                   onEdit={openEdit}
                   onDelete={(t) => setDeletingId(t.id)}
@@ -196,7 +197,7 @@ export default function Tasks() {
         <TaskForm key={editingId ?? "new"} task={editingTask} onSave={handleSave} onClose={closeForm} />
       )}
       {viewingTask && (
-        <TaskDetails task={viewingTask} onClose={() => setViewingId(null)} onEdit={openEdit}
+        <TaskDetails task={viewingTask} priority={priorityById[viewingTask.id]} risk={riskById[viewingTask.id]} onClose={() => setViewingId(null)} onEdit={openEdit}
           onDelete={(t) => { setViewingId(null); setDeletingId(t.id); }} />
       )}
       {deletingTask && (
