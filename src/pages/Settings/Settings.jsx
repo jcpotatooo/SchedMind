@@ -129,9 +129,15 @@ export default function Settings() {
             <select id="maxSession" value={form.maxSessionMinutes}
               onChange={(e) => setForm({ ...form, maxSessionMinutes: Number(e.target.value) })}
               className={controlClass()}>
-              {SESSION_LENGTH_OPTIONS.map((m) => <option key={m} value={m}>{m} minutes</option>)}
+              {SESSION_LENGTH_OPTIONS.map((m) => (
+                <option key={m} value={m}>
+                  {m >= 60 ? `${m / 60} hour${m > 60 ? "s" : ""} (${m} min)` : `${m} minutes`}
+                </option>
+              ))}
             </select>
-            <p className="mt-1 text-xs text-ink-500">Long blocks are split into sessions of this length. Take a short break between them.</p>
+            <p className="mt-1 text-xs text-ink-500">
+              Long tasks are split into sessions of this length (e.g. a 2.5-hour task becomes two 1-hour sessions and one 35-minute session).
+            </p>
           </div>
           <label className="flex items-start gap-3 text-sm">
             <input type="checkbox" checked={form.autoAdjust}

@@ -39,3 +39,19 @@ export function fmtHour(hour) {
 
 export const isTaskOverdue = (task, nowMs) =>
   task.status !== "done" && !!task.deadline && task.deadline.getTime() <= nowMs;
+
+// Helper to determine session part number for multi-session tasks
+export function getSessionPartInfo(session, allSessions = []) {
+  if (session?.part && session?.totalParts) {
+    return { part: session.part, total: session.totalParts };
+  }
+  if (!session?.taskId || !allSessions.length) return null;
+  const taskSessions = allSessions.filter((s) => s.taskId === session.taskId);
+  if (taskSessions.length <= 1) return null;
+  const sorted = [...taskSessions].sort((a, b) => a.start - b.start);
+  const idx = sorted.findIndex((s) => s.id === session.id);
+  return {
+    part: idx >= 0 ? idx + 1 : 1,
+    total: sorted.length,
+  };
+}

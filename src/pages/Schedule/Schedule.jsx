@@ -7,7 +7,7 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import { setSessionStatus } from "../../services/scheduleService.js";
 import { updateTask } from "../../services/taskService.js";
 import { friendlyError } from "../../lib/authErrors.js";
-import { fmtMin } from "../../lib/plan/format.js";
+import { fmtMin, getSessionPartInfo } from "../../lib/plan/format.js";
 import Alert from "../../components/ui/Alert.jsx";
 import Button from "../../components/ui/Button.jsx";
 import EmptyState from "../../components/ui/EmptyState.jsx";
@@ -40,6 +40,7 @@ export default function Schedule() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
   const [showAll, setShowAll] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(false);
   const [openWhy, setOpenWhy] = useState(null);
   const [taskPrompt, setTaskPrompt] = useState(null);
 
@@ -90,33 +91,58 @@ export default function Schedule() {
         task,
       });
 
-      // Prompt completion if this session was marked done and no more planned sessions remain for this task
-      if (status === "done" && task && task.status !== "done") {
-        const remainingPlanned = sessions.filter(
-          (s) => s.taskId === session.taskId && s.id !== session.id && s.status === "planned"
-        );
-        if (remainingPlanned.length === 0) {
-          setTaskPrompt(task);
+      if (status === "done") {
+        setNotice({
+          type: "success",
+          text: `“${session.taskTitle}” study session marked as Done.`,
+          undoSession: session,
+        });
+
+        // Prompt completion if this session was marked done and no more planned sessions remain for this task
+        if (task && task.status !== "done") {
+          const remainingPlanned = sessions.filter(
+            (s) => s.taskId === session.taskId && s.id !== session.id && s.status === "planned"
+          );
+          if (remainingPlanned.length === 0) {
+            setTaskPrompt(task);
+          }
         }
+      } else if (status === "planned") {
+        setNotice({ type: "success", text: `Session restored to your schedule.` });
       }
     } catch (err) {
       setNotice({ type: "error", text: friendlyError(err) || "Could not update the session." });
     }
   }
 
-  // Sessions from today onward, grouped by day.
-  const days = useMemo(() => {
+  const openTasks = useMemo(() => tasks.filter((t) => t.status !== "done"), [tasks]);
+  const openTaskIds = useMemo(() => new Set(openTasks.map((t) => t.id)), [openTasks]);
+
+  // Active upcoming study sessions from today onward:
+  // 1. Belong to an unfinished task (tasks marked Done in the task bar are NEVER shown in upcoming schedule)
+  // 2. By default, completed sessions disappear so only remaining study sessions are shown.
+  // 3. User can toggle "Show completed" to review or undo finished sessions.
+  const { days, completedCount } = useMemo(() => {
     const todayStart = startOfDay(new Date()).getTime();
-    const upcoming = sessions.filter((s) => s.end >= todayStart).sort((a, b) => a.start - b.start);
+
+    // Only sessions for active, unfinished tasks
+    const relevant = sessions.filter((s) => openTaskIds.has(s.taskId) && s.end >= todayStart);
+    const planned = relevant.filter((s) => s.status === "planned");
+    const completed = relevant.filter((s) => s.status === "done");
+
+    const toShow = showCompleted ? relevant : planned;
+    const sorted = [...toShow].sort((a, b) => a.start - b.start);
+
     const groups = [];
-    upcoming.forEach((s) => {
+    sorted.forEach((s) => {
       const key = format(s.start, "yyyy-MM-dd");
       const last = groups[groups.length - 1];
       if (last && last.key === key) last.items.push(s);
       else groups.push({ key, label: dayLabel(s.start), items: [s] });
     });
-    return groups;
-  }, [sessions]);
+
+    return { days: groups, completedCount: completed.length };
+  }, [sessions, openTaskIds, showCompleted]);
 
   // Tasks that are NOT marked Done but whose planned study time is already used up
   // (studied >= estimate + the one extra reserve). They have no sessions left, so tell the student why.
@@ -124,7 +150,6 @@ export default function Schedule() {
   const usedUp = ranking.filter((i) => i.work.remaining === 0 && (i.task.studiedMinutes || 0) > 0 && !plannedTaskIds.has(i.task.id));
 
   const shownDays = showAll ? days : days.slice(0, 7);
-  const openTasks = tasks.filter((t) => t.status !== "done");
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6">
@@ -151,7 +176,25 @@ export default function Schedule() {
       </div>
 
       <div className="mt-4 space-y-3">
-        <Alert type={notice?.type || "info"}>{notice?.text}</Alert>
+        {notice && (
+          <Alert type={notice.type || "info"}>
+            <div className="flex w-full items-center justify-between gap-3">
+              <span>{notice.text}</span>
+              {notice.undoSession && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    changeStatus(notice.undoSession, "planned");
+                    setNotice(null);
+                  }}
+                  className="shrink-0 font-bold underline hover:opacity-80"
+                >
+                  Undo
+                </button>
+              )}
+            </div>
+          </Alert>
+        )}
         <Alert type="error">{error || scheduleError}</Alert>
         {usingDefaultSettings && (
           <Alert type="info">
@@ -285,10 +328,44 @@ export default function Schedule() {
               </div>
             )}
 
+            {completedCount > 0 && (
+              <div className="mb-4 flex items-center justify-between rounded-2xl border border-ink-100 bg-surface px-4 py-2.5 text-xs text-ink-500 shadow-xs">
+                <span>
+                  {completedCount} completed study session{completedCount === 1 ? "" : "s"} {showCompleted ? "shown" : "hidden"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowCompleted(!showCompleted)}
+                  className="font-semibold text-brand-600 hover:underline"
+                >
+                  {showCompleted ? "Hide completed" : "Show completed"}
+                </button>
+              </div>
+            )}
+
             {shownDays.length === 0 ? (
-              <EmptyState icon={CalendarDays} title="No upcoming sessions"
-                text="No free study time is left before your deadlines. Check your study hours in Settings."
-                action={<Link to="/settings" className="font-semibold text-brand-600">Open Settings</Link>} />
+              <EmptyState
+                icon={CalendarDays}
+                title={completedCount > 0 ? "All scheduled sessions completed!" : "No upcoming sessions"}
+                text={
+                  completedCount > 0
+                    ? `You completed all ${completedCount} study session${completedCount === 1 ? "" : "s"} planned for today and tomorrow. Great work!`
+                    : "No free study time is left before your deadlines. Check your study hours in Settings."
+                }
+                action={
+                  completedCount > 0 && !showCompleted ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowCompleted(true)}
+                      className="inline-flex h-10 items-center rounded-xl bg-brand-50 px-4 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition"
+                    >
+                      View completed sessions
+                    </button>
+                  ) : (
+                    <Link to="/settings" className="font-semibold text-brand-600">Open Settings</Link>
+                  )
+                }
+              />
             ) : (
               <div className="space-y-5">
                 {shownDays.map((day) => (
@@ -299,10 +376,18 @@ export default function Schedule() {
                         <li key={s.id} className="rounded-2xl bg-surface p-4 shadow-card">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <p className="truncate font-semibold">
-                                {s.taskTitle}
-                                {s.ai && <span className="ml-2 rounded-full bg-brand-50 px-2 py-0.5 align-middle text-[10px] font-bold text-brand-700">AI</span>}
-                              </p>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="truncate font-semibold">{s.taskTitle}</p>
+                                {(() => {
+                                  const partInfo = getSessionPartInfo(s, sessions);
+                                  return partInfo && partInfo.total > 1 ? (
+                                    <span className="rounded-md bg-brand-50 px-2 py-0.5 text-[11px] font-bold text-brand-700">
+                                      Part {partInfo.part} of {partInfo.total}
+                                    </span>
+                                  ) : null;
+                                })()}
+                                {s.ai && <span className="rounded-full bg-brand-50 px-2 py-0.5 align-middle text-[10px] font-bold text-brand-700">AI</span>}
+                              </div>
                               <p className="text-xs text-ink-500">
                                 {format(s.start, "h:mm a")} – {format(s.end, "h:mm a")} · {fmtMin(s.minutes)} · {s.category}
                               </p>

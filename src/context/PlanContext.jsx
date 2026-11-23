@@ -28,7 +28,7 @@ import {
 // PlanContext = everything the "intelligent" features need, calculated once
 // and shared by every page: tasks, settings, schedule, behavior, priorities, risks.
 // It also runs AUTOMATIC SCHEDULE ADJUSTMENT in the background.
-const PlanContext = createContext(null);
+export const PlanContext = createContext(null);
 
 export function PlanProvider({ children }) {
   const { user, profile } = useAuth();
@@ -75,8 +75,8 @@ export function PlanProvider({ children }) {
 
   const behavior = useMemo(() => computeBehavior(tasks, sessions), [tasks, sessions]);
   const slots = useMemo(
-    () => removeBlocked(buildSlots(settings, now, extraMinutes), sessions, now.getTime()),
-    [settings, now, extraMinutes, sessions]
+    () => removeBlocked(buildSlots(settings, now, extraMinutes), sessions, now.getTime(), tasks),
+    [settings, now, extraMinutes, sessions, tasks]
   );
 
   // AI advice saved with the schedule (null when the schedule is rule-based only).
@@ -120,7 +120,7 @@ export function PlanProvider({ children }) {
   // places the sessions. If the AI is unavailable, the rule-based scheduler is used instead.
   const regenerateWithAI = useCallback(async () => {
     const nowDate = new Date();
-    const aiSlots = removeBlocked(buildSlots(settings, nowDate, extraMinutes), sessions, nowDate.getTime());
+    const aiSlots = removeBlocked(buildSlots(settings, nowDate, extraMinutes), sessions, nowDate.getTime(), tasks);
     const base = rankTasks({ tasks, slots: aiSlots, behavior, now: nowDate });
     let ai = null;
     let error = "";

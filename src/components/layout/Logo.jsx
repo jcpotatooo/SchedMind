@@ -1,19 +1,18 @@
-import { CalendarCheck } from "lucide-react";
+import logoImg from "../../assets/logo.png";
 
-// SchedMind logo: a rounded teal square with a calendar-check icon + wordmark.
-// size: "sm" for headers, "lg" for the login card.
+// SchedMind logo: brand icon + wordmark.
+// size: "sm" for headers/sidebar, "lg" for the login/auth card.
 export default function Logo({ size = "sm", showText = true }) {
-  const box = size === "lg" ? "h-16 w-16 rounded-2xl" : "h-9 w-9 rounded-xl";
-  const icon = size === "lg" ? 32 : 20;
-  const text = size === "lg" ? "text-2xl" : "text-xl";
+  const imgSize = size === "lg" ? "h-24 w-24 sm:h-28 sm:w-28" : "h-11 w-11";
+  const text = size === "lg" ? "text-3xl" : "text-xl";
 
   return (
     <div className="flex items-center gap-3">
-      <div
-        className={`${box} flex items-center justify-center bg-gradient-to-br from-brand-400 to-brand-600 text-white shadow-card`}
-      >
-        <CalendarCheck size={icon} strokeWidth={2.2} />
-      </div>
+      <img
+        src={logoImg}
+        alt="SchedMind Logo"
+        className={`${imgSize} shrink-0 object-contain drop-shadow-sm transition-transform duration-200 hover:scale-105`}
+      />
       {showText && (
         <span className={`${text} font-extrabold tracking-tight text-brand-600`}>
           SchedMind

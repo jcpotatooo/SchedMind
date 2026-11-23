@@ -1,5 +1,6 @@
 import { SLOT_MINUTES, buildSlots, removeBlocked } from "./time.js";
 import { rankTasks } from "./priority.js";
+import { fmtMin } from "./format.js";
 
 // SMART SCHEDULING (rule-based greedy algorithm, NOT machine learning).
 //
@@ -25,8 +26,8 @@ import { rankTasks } from "./priority.js";
 // mode "rescue": ordering becomes overdue first, then nearest deadline first (EDF),
 // the safest way to save as many deadlines as possible.
 export function generateSchedule({ tasks, settings, behavior, now = new Date(), mode = "normal", extraMinutes = 0, existingSessions = [], hints = null }) {
-  // Slots already used by Done/Missed sessions are not offered again.
-  const slots = removeBlocked(buildSlots(settings, now, extraMinutes), existingSessions, now.getTime());
+  // Slots already used by Done/Missed sessions are not offered again (completed tasks don't block).
+  const slots = removeBlocked(buildSlots(settings, now, extraMinutes), existingSessions, now.getTime(), tasks);
   const { list, byId } = rankTasks({ tasks, slots, behavior, now, hints });
 
   // Number of slots that end on or before each task's deadline (a slot index limit).
@@ -130,6 +131,17 @@ export function generateSchedule({ tasks, settings, behavior, now = new Date(), 
     });
   }
 
+  // Label multi-part sessions so students understand why a task has multiple sessions scheduled.
+  const taskCounts = new Map();
+  sessions.forEach((s) => taskCounts.set(s.taskId, (taskCounts.get(s.taskId) || 0) + 1));
+  const taskIndex = new Map();
+  sessions.forEach((s) => {
+    const current = (taskIndex.get(s.taskId) || 0) + 1;
+    taskIndex.set(s.taskId, current);
+    s.part = current;
+    s.totalParts = taskCounts.get(s.taskId);
+  });
+
   // Explanation for every session (Feature 7).
   sessions.forEach((s) => {
     const item = byId[s.taskId];
@@ -139,6 +151,11 @@ export function generateSchedule({ tasks, settings, behavior, now = new Date(), 
       parts.push("It cannot be fully finished before its deadline, so it only uses time that other tasks do not need.");
     if (s.peak) parts.push("Placed in one of your most productive hours.");
     if (mode === "rescue") parts.push("Rescue Mode: tasks are ordered by nearest deadline first.");
+    if (s.totalParts > 1) {
+      parts.push(
+        `Session ${s.part} of ${s.totalParts} (${fmtMin(s.minutes)}). Tasks longer than ${settings.maxSessionMinutes} minutes are split into focused sessions.`
+      );
+    }
     s.reason = parts.join(" ");
   });
 

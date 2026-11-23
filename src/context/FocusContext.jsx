@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useAuth } from "./AuthContext.jsx";
-import { usePlan } from "./PlanContext.jsx";
+import { PlanContext } from "./PlanContext.jsx";
 import { saveFocusSession } from "../services/focusService.js";
 import { friendlyError } from "../lib/authErrors.js";
 
@@ -48,7 +48,8 @@ function beep() {
 
 export function FocusProvider({ children }) {
   const { user } = useAuth();
-  const { tasks } = usePlan();
+  const plan = useContext(PlanContext);
+  const tasks = plan?.tasks || [];
 
   const [initial] = useState(() => loadTimer(user.uid));
   const [timer, setTimer] = useState(initial.timer);

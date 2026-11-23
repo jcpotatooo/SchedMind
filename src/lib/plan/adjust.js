@@ -114,11 +114,18 @@ export function summarizeMoves(oldPlanned, newPlanned) {
 export function buildScheduleDoc({ tasks, settings, schedule, gen, mode, extraMinutes, reasons, now, ai = null }) {
   const nowMs = now.getTime();
   const { sessions: marked } = markPastSessions(schedule?.sessions || [], nowMs);
+  const doneTaskIds = new Set((tasks || []).filter((t) => t.status === "done").map((t) => t.id));
+
   const seen = new Set();
   const history = marked
     .filter((s) => s.status !== "planned")
-    .filter((s) => (seen.has(s.id) ? false : seen.add(s.id)))
+    .filter((s) => {
+      // Completed tasks never carry future sessions forward into the schedule
+      if (doneTaskIds.has(s.taskId) && s.start > nowMs) return false;
+      return seen.has(s.id) ? false : seen.add(s.id);
+    })
     .slice(-200);
+
   const oldPlanned = marked.filter((s) => s.status === "planned");
   const sessions = [...history, ...gen.sessions];
 

@@ -29,7 +29,8 @@ export function buildSlots(settings, now, extraMinutes = 0, horizonDays = 60) {
     if (!window || !window.enabled) continue;
 
     const startMin = toMinutes(window.start);
-    const endMin = Math.min(toMinutes(window.end) + extraMinutes, 24 * 60);
+    const rawEnd = window.end === "00:00" ? 24 * 60 : toMinutes(window.end);
+    const endMin = Math.min(rawEnd + extraMinutes, 24 * 60);
     for (let m = startMin; m + SLOT_MINUTES <= endMin; m += SLOT_MINUTES) {
       const start = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, m).getTime();
       if (start < first) continue; // already in the past
@@ -50,10 +51,18 @@ export function capacityMinutes(slots, deadlineMs) {
 }
 
 // Study time that is already used by a session the student marked Done or Missed
-// must stay used. Without this, marking a session Done would free its slot and the
-// planner would put a new session in the very same time.
-export function removeBlocked(slots, sessions, nowMs) {
-  const blocked = (sessions || []).filter((s) => s.status !== "planned" && s.end > nowMs);
+// must stay used unless the task is already finished or the session was completed early.
+// Completed tasks and early-finished future sessions NEVER block new tasks from using slots.
+export function removeBlocked(slots, sessions, nowMs, tasks = []) {
+  const doneTaskIds = new Set((tasks || []).filter((t) => t.status === "done").map((t) => t.id));
+  const blocked = (sessions || []).filter((s) => {
+    if (s.status === "planned") return false;
+    // Completed tasks never block future study slots
+    if (doneTaskIds.has(s.taskId)) return false;
+    // Sessions already marked done whose planned slot is in the future don't block
+    if (s.status === "done" && s.start > nowMs) return false;
+    return s.end > nowMs;
+  });
   if (blocked.length === 0) return slots;
   return slots.filter((slot) => !blocked.some((s) => slot.start < s.end && slot.end > s.start));
 }

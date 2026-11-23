@@ -6,7 +6,7 @@ import {
 } from "date-fns";
 import { ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import { usePlan } from "../../context/PlanContext.jsx";
-import { fmtMin } from "../../lib/plan/format.js";
+import { fmtMin, getSessionPartInfo } from "../../lib/plan/format.js";
 import { statusInfo } from "../../lib/taskConstants.js";
 
 // CALENDAR (Feature 8): a month view of task deadlines and planned study sessions.
@@ -118,7 +118,17 @@ export default function Calendar() {
                   <li key={s.id} className="flex items-center gap-3 rounded-2xl bg-surface p-3 text-sm shadow-card">
                     <Clock size={16} className="shrink-0 text-brand-600" />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-semibold">{s.taskTitle}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="block truncate font-semibold">{s.taskTitle}</span>
+                        {(() => {
+                          const partInfo = getSessionPartInfo(s, sessions);
+                          return partInfo && partInfo.total > 1 ? (
+                            <span className="rounded bg-brand-50 px-1.5 py-0.2 text-[10px] font-bold text-brand-700">
+                              Part {partInfo.part}/{partInfo.total}
+                            </span>
+                          ) : null;
+                        })()}
+                      </div>
                       <span className="text-xs text-ink-500">{format(s.start, "h:mm a")} – {format(s.end, "h:mm a")} · {fmtMin(s.minutes)}</span>
                     </span>
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${

@@ -3,7 +3,7 @@
 export const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 // Display order: Monday first.
 export const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
-export const SESSION_LENGTH_OPTIONS = [30, 60, 90, 120];
+export const SESSION_LENGTH_OPTIONS = [30, 60, 90, 120, 180, 240];
 
 // Starting values used until the student saves their own (the app tells them so).
 export function defaultSettings() {
@@ -33,9 +33,21 @@ export function normalizeSettings(raw) {
   };
 }
 
-const toMinutes = (hm) => {
+export const toMinutes = (hm) => {
+  if (!hm) return 0;
   const [h, m] = hm.split(":").map(Number);
-  return h * 60 + m;
+  return h * 60 + (m || 0);
+};
+
+// When used as an end time, "00:00" after a start time represents 24:00 (midnight, end of day).
+export const endToMinutes = (endHm, startHm = "") => {
+  const endMin = toMinutes(endHm);
+  const startMin = toMinutes(startHm);
+  // If end is midnight (00:00) or numerically <= start, treat 00:00 as 24:00 (1440 min)
+  if (endHm === "00:00" || (startHm && endMin <= startMin && endMin === 0)) {
+    return 24 * 60;
+  }
+  return endMin;
 };
 
 // Returns { general: "message" | "", days: { [dayIndex]: "message" } }
@@ -46,8 +58,15 @@ export function validateSettings(settings) {
     const w = settings.availability[day];
     if (!w.enabled) continue;
     enabledCount++;
-    if (!w.start || !w.end) days[day] = "Choose a start and end time.";
-    else if (toMinutes(w.end) - toMinutes(w.start) < 30) days[day] = "End must be at least 30 minutes after start.";
+    if (!w.start || !w.end) {
+      days[day] = "Choose a start and end time.";
+    } else {
+      const startMin = toMinutes(w.start);
+      const endMin = endToMinutes(w.end, w.start);
+      if (endMin - startMin < 30) {
+        days[day] = "End must be at least 30 minutes after start.";
+      }
+    }
   }
   return {
     general: enabledCount === 0 ? "Turn on at least one study day." : "",
@@ -59,7 +78,11 @@ export function weeklyHours(settings) {
   let minutes = 0;
   for (let day = 0; day < 7; day++) {
     const w = settings.availability[day];
-    if (w.enabled && w.start && w.end) minutes += Math.max(0, toMinutes(w.end) - toMinutes(w.start));
+    if (w.enabled && w.start && w.end) {
+      const startMin = toMinutes(w.start);
+      const endMin = endToMinutes(w.end, w.start);
+      minutes += Math.max(0, endMin - startMin);
+    }
   }
   return minutes / 60;
 }
